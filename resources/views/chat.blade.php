@@ -6,6 +6,9 @@
     <title>Live Chat</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+    <!-- Add Laravel Echo and Pusher JS -->
+    <script src="https://js.pusher.com/7.0/pusher.min.js"></script>
+    <script src="https://unpkg.com/@ably/laravel-echo@1.0.0/dist/echo.iife.js"></script>
     <meta name="csrf-token" content="{{ csrf_token() }}">
 </head>
 <body>
@@ -33,9 +36,18 @@
     </div>
 
     <script>
+        // Axios setup
         axios.defaults.headers.common['X-Requested-With'] = 'XMLHttpRequest';
         axios.defaults.headers.common['X-CSRF-TOKEN'] = document.querySelector('meta[name="csrf-token"]').content;
         axios.defaults.baseURL = 'https://livechat-main-h0tkup.laravel.cloud';
+
+        // Laravel Echo setup
+        const echo = new Echo({
+            broadcaster: 'pusher',
+            key: '{{ config("broadcasting.connections.pusher.key") }}',
+            cluster: '{{ config("broadcasting.connections.pusher.options.cluster") }}',
+            forceTLS: true
+        });
 
         const elements = {
             chatToggle: document.getElementById('chatToggle'),
@@ -61,11 +73,12 @@
         function checkAuthStatus() {
             axios.get('/check-auth')
                 .then(response => {
-                    console.log('Check auth response:', response.data); // Debug
+                    console.log('Check auth response:', response.data);
                     if (response.data.authenticated) {
                         elements.authSection.classList.add('hidden');
                         elements.chatSection.classList.remove('hidden');
                         loadChatHistory();
+                        setupRealtimeUpdates();
                     } else {
                         elements.authSection.classList.remove('hidden');
                         elements.chatSection.classList.add('hidden');
@@ -84,7 +97,8 @@
                     if (response.data.success) {
                         elements.messages.innerHTML = '';
                         response.data.chat.forEach(msg => {
-                            const color = msg.sender === 'client' ? 'text-blue-500' : 'text-green-500';
+                            const color = msg.sender === 'client' ? 'text-blue-500' : 
+                                        msg.sender === 'telegram' ? 'text-green-500' : 'text-gray-500';
                             elements.messages.innerHTML += `<div class="${color}">${msg.content}</div>`;
                         });
                         elements.messages.scrollTop = elements.messages.scrollHeight;
@@ -106,7 +120,7 @@
                 .then(response => {
                     if (response.data.success) {
                         response.data.chat.forEach(msg => {
-                            const color = msg.sender === 'client' ? 'text-blue-500' : 'text-green-500';
+                            const color = msg.sender === 'client' ? 'text-blue-500' : 'text-gray-500';
                             elements.messages.innerHTML += `<div class="${color}">${msg.content}</div>`;
                         });
                         elements.messageInput.value = '';
@@ -126,14 +140,25 @@
                 });
         }
 
+        function setupRealtimeUpdates() {
+            echo.channel('chat')
+                .listen('MessageReceived', (e) => {
+                    console.log('Received real-time message:', e);
+                    const msg = e.message;
+                    const color = msg.sender === 'client' ? 'text-blue-500' : 
+                                msg.sender === 'telegram' ? 'text-green-500' : 'text-gray-500';
+                    elements.messages.innerHTML += `<div class="${color}">${msg.content}</div>`;
+                    elements.messages.scrollTop = elements.messages.scrollHeight;
+                });
+        }
+
         elements.sendMessage.addEventListener('click', sendChatMessage);
         elements.messageInput.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') sendChatMessage();
         });
 
         window.onTelegramAuth = function(user) {
-            console.log('Telegram auth data:', user); // Debug widget data
-            // Optional: Fallback POST if GET redirect fails
+            console.log('Telegram auth data:', user);
             axios.post('/telegram-callback', user)
                 .then(response => {
                     if (response.data.success) {
