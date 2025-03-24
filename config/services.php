@@ -39,6 +39,6 @@ return [
         'bot_token' => env('TELEGRAM_BOT_TOKEN','7314683639:AAE7D556JD3AJL8sd9bmXsiVYZt7wz1ht3M'),
         'chat_id' => env('TELEGRAM_CHAT_ID','-1002355773121'),
         'bot_name' => env('TELEGRAM_BOT_NAME','harulaid_bot'),
-        'webhook_url' => env('TELEGRAM_WEBHOOK_URL','https://livechat-main-h0tkup.laravel.cloud'),
+        'webhook_url' => env('TELEGRAM_WEBHOOK_URL','https://livechat-main-h0tkup.laravel.cloud/webhook'),
     ],
 ];
