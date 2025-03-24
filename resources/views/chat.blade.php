@@ -35,7 +35,7 @@
     <script>
         axios.defaults.headers.common['X-Requested-With'] = 'XMLHttpRequest';
         axios.defaults.headers.common['X-CSRF-TOKEN'] = document.querySelector('meta[name="csrf-token"]').content;
-        axios.defaults.baseURL = 'https://livechat-main-h0tkup.laravel.cloud'; // Replace with your Ngrok URL
+        axios.defaults.baseURL = 'https://livechat-main-h0tkup.laravel.cloud';
 
         const elements = {
             chatToggle: document.getElementById('chatToggle'),
@@ -61,6 +61,7 @@
         function checkAuthStatus() {
             axios.get('/check-auth')
                 .then(response => {
+                    console.log('Check auth response:', response.data); // Debug
                     if (response.data.authenticated) {
                         elements.authSection.classList.add('hidden');
                         elements.chatSection.classList.remove('hidden');
@@ -71,6 +72,7 @@
                     }
                 })
                 .catch(error => {
+                    console.error('Check auth error:', error.response?.data || error.message);
                     elements.errorMessage.textContent = 'Server error: ' + (error.response?.data.message || error.message);
                     elements.errorMessage.classList.remove('hidden');
                 });
@@ -87,6 +89,9 @@
                         });
                         elements.messages.scrollTop = elements.messages.scrollHeight;
                     }
+                })
+                .catch(error => {
+                    console.error('Chat history error:', error.response?.data || error.message);
                 });
         }
 
@@ -112,6 +117,7 @@
                     }
                 })
                 .catch(error => {
+                    console.error('Send message error:', error.response?.data || error.message);
                     elements.errorMessage.textContent = error.response?.data.message || 'Failed to send';
                     elements.errorMessage.classList.remove('hidden');
                 })
@@ -126,8 +132,22 @@
         });
 
         window.onTelegramAuth = function(user) {
-            // Telegram widget uses GET, handled by redirect
-            console.log('Telegram auth initiated', user);
+            console.log('Telegram auth data:', user); // Debug widget data
+            // Optional: Fallback POST if GET redirect fails
+            axios.post('/telegram-callback', user)
+                .then(response => {
+                    if (response.data.success) {
+                        checkAuthStatus();
+                    } else {
+                        elements.errorMessage.textContent = response.data.message;
+                        elements.errorMessage.classList.remove('hidden');
+                    }
+                })
+                .catch(error => {
+                    console.error('Telegram auth error:', error.response?.data || error.message);
+                    elements.errorMessage.textContent = 'Auth error: ' + (error.response?.data.message || error.message);
+                    elements.errorMessage.classList.remove('hidden');
+                });
         };
 
         checkAuthStatus();
