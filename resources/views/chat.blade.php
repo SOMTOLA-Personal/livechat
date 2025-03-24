@@ -20,7 +20,7 @@
                 <script async src="https://telegram.org/js/telegram-widget.js?22"
                         data-telegram-login="{{ config('services.telegram.bot_name') }}"
                         data-size="large"
-                        data-auth-url="https://harulaid-bot.onrender.com/telegram-callback"
+                        data-auth-url="https://livechat-main-h0tkup.laravel.cloud/telegram-callback"
                         data-request-access="write"></script>
             </div>
             <div id="chatSection" class="hidden">
