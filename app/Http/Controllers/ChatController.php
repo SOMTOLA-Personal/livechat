@@ -18,7 +18,6 @@ class ChatController extends Controller
     public function sendMessage(Request $request)
     {
         try {
-            // Check if user is authenticated (we'll add this later)
             if (!session('telegram_authenticated')) {
                 return response()->json([
                     'success' => false,
@@ -26,20 +25,25 @@ class ChatController extends Controller
                 ], 403);
             }
 
+            Log::info('Processing sendMessage', ['request' => $request->all()]);
+
             $validated = $request->validate([
                 'message' => 'required|string|max:4096',
             ]);
 
             $clientMessage = $validated['message'];
+            Log::info('Validated client message', ['message' => $clientMessage]);
 
             // Store client message
-            Message::create([
+            $clientMsg = Message::create([
                 'sender' => 'client',
                 'content' => $clientMessage
             ]);
+            Log::info('Client message stored', ['id' => $clientMsg->id]);
 
-            // Send to Telegram and get success status
+            // Send to Telegram
             $telegramSuccess = $this->telegram->sendMessage($clientMessage);
+            Log::info('Telegram send result', ['success' => $telegramSuccess]);
 
             if (!$telegramSuccess) {
                 return response()->json([
@@ -48,12 +52,13 @@ class ChatController extends Controller
                 ], 500);
             }
 
-            // Server response (e.g., "Hello back!")
+            // Server response
             $serverResponse = $clientMessage === 'hi' ? 'Hello back!' : 'Message received';
-            Message::create([
+            $serverMsg = Message::create([
                 'sender' => 'server',
                 'content' => $serverResponse
             ]);
+            Log::info('Server message stored', ['id' => $serverMsg->id]);
 
             return response()->json([
                 'success' => true,
@@ -64,31 +69,52 @@ class ChatController extends Controller
                 ]
             ]);
 
-        } catch (\Exception $e) {
-            Log::error('ChatController error', [
-                'message' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            Log::warning('Validation error in sendMessage', [
+                'errors' => $e->errors(),
+                'request' => $request->all()
             ]);
             return response()->json([
                 'success' => false,
-                'message' => 'Internal server error'
+                'message' => 'Validation failed: ' . implode(', ', $e->errors()['message'] ?? ['Invalid input'])
+            ], 422);
+        } catch (\Exception $e) {
+            Log::error('ChatController error', [
+                'message' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+                'request' => $request->all()
+            ]);
+            return response()->json([
+                'success' => false,
+                'message' => 'Internal server error: ' . $e->getMessage()
             ], 500);
         }
     }
 
     public function getChatHistory()
     {
-        if (!session('telegram_authenticated')) {
+        try {
+            if (!session('telegram_authenticated')) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Please authenticate with Telegram first'
+                ], 403);
+            }
+
+            $messages = Message::orderBy('created_at', 'asc')->get(['sender', 'content']);
+            return response()->json([
+                'success' => true,
+                'chat' => $messages
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Chat history error', [
+                'message' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
             return response()->json([
                 'success' => false,
-                'message' => 'Please authenticate with Telegram first'
-            ], 403);
+                'message' => 'Failed to load chat history'
+            ], 500);
         }
-
-        $messages = Message::orderBy('created_at', 'asc')->get(['sender', 'content']);
-        return response()->json([
-            'success' => true,
-            'chat' => $messages
-        ]);
     }
 }
