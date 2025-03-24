@@ -6,12 +6,11 @@ use Illuminate\Support\Facades\Log;
 
 class AuthController extends Controller
 {
-    public function handleTelegramCallback(Request $request)
+   public function handleTelegramCallback(Request $request)
     {
         try {
-            $telegramData = $request->all();
+            $telegramData = $request->query(); // Get query parameters from GET request
 
-            // Validate Telegram data
             if (!$this->verifyTelegramData($telegramData)) {
                 return response()->json([
                     'success' => false,
@@ -19,7 +18,6 @@ class AuthController extends Controller
                 ], 401);
             }
 
-            // Store user authentication in session
             session([
                 'telegram_authenticated' => true,
                 'telegram_user_id' => $telegramData['id'],
@@ -29,10 +27,8 @@ class AuthController extends Controller
 
             Log::info('User authenticated via Telegram', $telegramData);
 
-            return response()->json([
-                'success' => true,
-                'message' => 'Successfully authenticated with Telegram'
-            ]);
+            // Redirect or return success (Telegram expects a page load)
+            return redirect('/')->with('message', 'Authenticated successfully');
 
         } catch (\Exception $e) {
             Log::error('Telegram auth error', [

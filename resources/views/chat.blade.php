@@ -35,6 +35,7 @@
     <script>
         axios.defaults.headers.common['X-Requested-With'] = 'XMLHttpRequest';
         axios.defaults.headers.common['X-CSRF-TOKEN'] = document.querySelector('meta[name="csrf-token"]').content;
+        axios.defaults.baseURL = 'https://livechat-main-h0tkup.laravel.cloud'; // Replace with your Ngrok URL
 
         const elements = {
             chatToggle: document.getElementById('chatToggle'),
@@ -48,7 +49,6 @@
             errorMessage: document.getElementById('errorMessage')
         };
 
-        // Toggle chat visibility
         elements.chatToggle.addEventListener('click', () => {
             elements.chatBox.classList.toggle('hidden');
             checkAuthStatus();
@@ -58,7 +58,6 @@
             elements.chatBox.classList.add('hidden');
         });
 
-        // Check authentication status
         function checkAuthStatus() {
             axios.get('/check-auth')
                 .then(response => {
@@ -72,11 +71,11 @@
                     }
                 })
                 .catch(error => {
-                    console.error('Auth check failed:', error);
+                    elements.errorMessage.textContent = 'Server error: ' + (error.response?.data.message || error.message);
+                    elements.errorMessage.classList.remove('hidden');
                 });
         }
 
-        // Load chat history
         function loadChatHistory() {
             axios.get('/chat-history')
                 .then(response => {
@@ -91,7 +90,6 @@
                 });
         }
 
-        // Send message
         function sendChatMessage() {
             const message = elements.messageInput.value.trim();
             if (!message) return;
@@ -127,25 +125,12 @@
             if (e.key === 'Enter') sendChatMessage();
         });
 
-        // Check auth on page load
-        checkAuthStatus();
-
-        // Handle Telegram callback (called by widget)
         window.onTelegramAuth = function(user) {
-            axios.post('/telegram-callback', user)
-                .then(response => {
-                    if (response.data.success) {
-                        checkAuthStatus(); // Refresh UI after auth
-                    } else {
-                        elements.errorMessage.textContent = response.data.message;
-                        elements.errorMessage.classList.remove('hidden');
-                    }
-                })
-                .catch(error => {
-                    elements.errorMessage.textContent = 'Authentication error';
-                    elements.errorMessage.classList.remove('hidden');
-                });
+            // Telegram widget uses GET, handled by redirect
+            console.log('Telegram auth initiated', user);
         };
+
+        checkAuthStatus();
     </script>
 </body>
 </html>
