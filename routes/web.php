@@ -9,3 +9,4 @@ Route::get('/telegram-callback', [AuthController::class, 'handleTelegramCallback
 Route::get('/check-auth', [AuthController::class, 'checkAuth']);
 Route::post('/send-message', [ChatController::class, 'sendMessage']);
 Route::get('/chat-history', [ChatController::class, 'getChatHistory']);
+Route::post('webhook', [ChatController::class, 'handleWebhook']);

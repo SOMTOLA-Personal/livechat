@@ -52,13 +52,11 @@ class ChatController extends Controller
                 ], 500);
             }
 
-            // Server response
-            $serverResponse = $clientMessage === 'hi' ? 'Hello back!' : 'Message received';
+            $serverResponse = $clientMessage === 'hi' ? 'How can i help you?' : 'Message received';
             $serverMsg = Message::create([
                 'sender' => 'server',
                 'content' => $serverResponse
             ]);
-            Log::info('Server message stored', ['id' => $serverMsg->id]);
 
             return response()->json([
                 'success' => true,
@@ -87,6 +85,50 @@ class ChatController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Internal server error: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    public function handleWebhook(Request $request)
+    {
+        try {
+            // Get the Telegram update
+            $update = $request->all();
+            Log::info('Received Telegram webhook', ['update' => $update]);
+
+            // Check if it's a message
+            if (isset($update['message']) && isset($update['message']['text'])) {
+                $telegramMessage = $update['message']['text'];
+                $chatId = $update['message']['chat']['id'];
+
+                // Store the received message
+                $receivedMsg = Message::create([
+                    'sender' => 'telegram',
+                    'content' => $telegramMessage
+                ]);
+                Log::info('Telegram message stored', ['id' => $receivedMsg->id]);
+
+                // Optional: Send an automatic response back to Telegram
+                $response = "Received your message: " . $telegramMessage;
+                $this->telegram->sendMessage($response, $chatId);
+
+                // You might want to broadcast this to your frontend using Laravel Echo or similar
+                // broadcast(new MessageReceived($receivedMsg))->toOthers();
+
+                return response()->json(['success' => true]);
+            }
+
+            return response()->json(['success' => true, 'message' => 'No message to process']);
+
+        } catch (\Exception $e) {
+            Log::error('Webhook error', [
+                'message' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+                'request' => $request->all()
+            ]);
+            return response()->json([
+                'success' => false,
+                'message' => 'Webhook processing failed'
             ], 500);
         }
     }
