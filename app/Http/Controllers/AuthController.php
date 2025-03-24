@@ -6,12 +6,17 @@ use Illuminate\Support\Facades\Log;
 
 class AuthController extends Controller
 {
-   public function handleTelegramCallback(Request $request)
+    public function handleTelegramCallback(Request $request)
     {
         try {
-            $telegramData = $request->query(); // Get query parameters from GET request
+            $telegramData = $request->query();
+            Log::info('Telegram callback data received', $telegramData);
 
             if (!$this->verifyTelegramData($telegramData)) {
+                Log::warning('Telegram data verification failed', [
+                    'data' => $telegramData,
+                    'bot_token' => config('services.telegram.bot_token')
+                ]);
                 return response()->json([
                     'success' => false,
                     'message' => 'Invalid Telegram authentication data'
@@ -26,8 +31,6 @@ class AuthController extends Controller
             ]);
 
             Log::info('User authenticated via Telegram', $telegramData);
-
-            // Redirect or return success (Telegram expects a page load)
             return redirect('/')->with('message', 'Authenticated successfully');
 
         } catch (\Exception $e) {
@@ -45,7 +48,11 @@ class AuthController extends Controller
     private function verifyTelegramData($data)
     {
         $botToken = config('services.telegram.bot_token');
+        Log::info('Verifying Telegram data', ['bot_token' => $botToken, 'data' => $data]);
+
+        // Check required fields
         if (!isset($data['id'], $data['hash'], $data['auth_date'])) {
+            Log::warning('Missing required fields', $data);
             return false;
         }
 
@@ -56,10 +63,26 @@ class AuthController extends Controller
             ->map(fn($value, $key) => "$key=$value")
             ->implode("\n");
 
+        Log::info('Data check string', ['string' => $dataCheckString]);
+
         $secretKey = hash('sha256', $botToken, true);
         $computedHash = hash_hmac('sha256', $dataCheckString, $secretKey);
 
-        return hash_equals($computedHash, $checkHash) && (time() - $data['auth_date']) < 86400;
+        Log::info('Hash comparison', [
+            'computed' => $computedHash,
+            'received' => $checkHash
+        ]);
+
+        $isValid = hash_equals($computedHash, $checkHash);
+        $isFresh = (time() - $data['auth_date']) < 86400;
+
+        Log::info('Validation result', [
+            'isValid' => $isValid,
+            'isFresh' => $isFresh,
+            'time_diff' => time() - $data['auth_date']
+        ]);
+
+        return $isValid && $isFresh;
     }
 
     public function checkAuth()
