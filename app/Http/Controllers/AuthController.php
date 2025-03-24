@@ -27,7 +27,7 @@ class AuthController extends Controller
                 'telegram_authenticated' => true,
                 'telegram_user_id' => $telegramData['id'],
                 'telegram_username' => $telegramData['username'] ?? null,
-                'telegram_first_name' => $telegramData['first_name'],
+                'telegram_first_name' => $telegramData['first_name'] ?? 'Unknown',
             ]);
 
             Log::info('User authenticated via Telegram', $telegramData);
@@ -36,11 +36,12 @@ class AuthController extends Controller
         } catch (\Exception $e) {
             Log::error('Telegram auth error', [
                 'message' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
+                'trace' => $e->getTraceAsString(),
+                'data' => $request->query()
             ]);
             return response()->json([
                 'success' => false,
-                'message' => 'Authentication failed'
+                'message' => 'Authentication failed: ' . $e->getMessage()
             ], 500);
         }
     }
@@ -48,23 +49,38 @@ class AuthController extends Controller
     private function verifyTelegramData($data)
     {
         $botToken = config('services.telegram.bot_token');
-        Log::info('Verifying Telegram data', ['bot_token' => $botToken, 'data' => $data]);
-
-        // Check required fields
-        if (!isset($data['id'], $data['hash'], $data['auth_date'])) {
-            Log::warning('Missing required fields', $data);
+        if (empty($botToken)) {
+            Log::error('Bot token not configured');
             return false;
         }
 
+        // Log all incoming data for debugging
+        Log::info('Verifying Telegram data', ['data' => $data]);
+
+        // Check required fields
+        if (!isset($data['id']) || !isset($data['hash']) || !isset($data['auth_date'])) {
+            Log::warning('Missing required Telegram fields', [
+                'id' => $data['id'] ?? 'missing',
+                'hash' => $data['hash'] ?? 'missing',
+                'auth_date' => $data['auth_date'] ?? 'missing'
+            ]);
+            return false;
+        }
+
+        // Prepare data for hash computation
         $checkHash = $data['hash'];
-        unset($data['hash']);
-        $dataCheckString = collect($data)
+        $dataForHash = $data;
+        unset($dataForHash['hash']); // Remove hash from computation
+
+        // Ensure proper string conversion and sorting
+        $dataCheckString = collect($dataForHash)
             ->sortKeys()
             ->map(fn($value, $key) => "$key=$value")
             ->implode("\n");
 
-        Log::info('Data check string', ['string' => $dataCheckString]);
+        Log::info('Computed data check string', ['string' => $dataCheckString]);
 
+        // Compute HMAC-SHA256 hash
         $secretKey = hash('sha256', $botToken, true);
         $computedHash = hash_hmac('sha256', $dataCheckString, $secretKey);
 
@@ -73,13 +89,18 @@ class AuthController extends Controller
             'received' => $checkHash
         ]);
 
+        // Validate hash and freshness
         $isValid = hash_equals($computedHash, $checkHash);
-        $isFresh = (time() - $data['auth_date']) < 86400;
+        $currentTime = time();
+        $authTime = (int) $data['auth_date'];
+        $isFresh = ($currentTime - $authTime) < 86400; // 24-hour window
 
-        Log::info('Validation result', [
+        Log::info('Validation results', [
             'isValid' => $isValid,
             'isFresh' => $isFresh,
-            'time_diff' => time() - $data['auth_date']
+            'current_time' => $currentTime,
+            'auth_date' => $authTime,
+            'time_diff' => $currentTime - $authTime
         ]);
 
         return $isValid && $isFresh;
